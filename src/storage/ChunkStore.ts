@@ -19,7 +19,7 @@ export class ChunkStore {
    * 保存已下载的分片
    */
   async saveChunk(taskId: string, chunk: Chunk): Promise<void> {
-    const key = `${this.prefix}${taskId}_${chunk.id}`
+    const key = `${this.prefix}${taskId}_${chunk.start}`
     const value = JSON.stringify({ index: chunk.index, size: chunk.size })
     this.storage.set(key, value)
   }
