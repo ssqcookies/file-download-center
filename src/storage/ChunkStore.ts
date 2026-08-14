@@ -1,10 +1,3 @@
-/**
- * 分片持久化存储
- *
- * 将已下载的分片信息存储到 Map 中，支持按任务 ID 查询已下载的分片序号。
- *
- */
-
 import type { Chunk } from '@/types'
 
 export class ChunkStore {
@@ -15,22 +8,12 @@ export class ChunkStore {
     this.storage = storage ?? new Map()
   }
 
-  /**
-   * 保存已下载的分片
-   */
   async saveChunk(taskId: string, chunk: Chunk): Promise<void> {
     const key = `${this.prefix}${taskId}_${chunk.start}`
     const value = JSON.stringify({ index: chunk.index, size: chunk.size })
     this.storage.set(key, value)
   }
 
-  /**
-   * 获取指定任务已下载的分片序号列表
-   *
-   * 遍历存储中以 `chunk_{taskId}_` 开头的 key，
-   * 从 key 末尾解析数字序号。
-   *
-   */
   async getDownloadedChunkIndices(taskId: string): Promise<number[]> {
     const indices: number[] = []
     const searchPrefix = `${this.prefix}${taskId}_`
@@ -48,9 +31,28 @@ export class ChunkStore {
     return indices.sort((a, b) => a - b)
   }
 
-  /**
-   * 清除指定任务的所有分片记录
-   */
+  async getChunkCount(taskId: string): Promise<number> {
+    const indices = await this.getDownloadedChunkIndices(taskId)
+    return indices.length
+  }
+
+  async hasChunk(taskId: string, index: number): Promise<boolean> {
+    const indices = await this.getDownloadedChunkIndices(taskId)
+    return indices.includes(index)
+  }
+
+  async getChunkInfo(taskId: string, index: number): Promise<{ index: number; size: number } | null> {
+    const key = `${this.prefix}${taskId}_${index}`
+    const value = this.storage.get(key)
+    if (!value) return null
+    return JSON.parse(value)
+  }
+
+  async getDownloadProgress(taskId: string, totalChunks: number): Promise<number> {
+    const indices = await this.getDownloadedChunkIndices(taskId)
+    return totalChunks > 0 ? indices.length / totalChunks : 0
+  }
+
   async clear(taskId: string): Promise<void> {
     const searchPrefix = `${this.prefix}${taskId}_`
     const keysToDelete: string[] = []
@@ -64,9 +66,6 @@ export class ChunkStore {
     keysToDelete.forEach((key) => this.storage.delete(key))
   }
 
-  /**
-   * 获取内部存储引用（主要用于测试）
-   */
   getInternalStorage(): Map<string, string> {
     return this.storage
   }

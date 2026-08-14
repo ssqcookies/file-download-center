@@ -1,10 +1,3 @@
-/**
- * 下载管理器
- *
- * 协调分片下载器、并发队列、重试策略、分片存储和进度追踪器，
- * 完成大文件的分片下载、断点续传、并发控制与错误重试。
- */
-
 import type { Chunk, DownloadTask, DownloadOptions, ProgressInfo } from '@/types'
 import { ChunkDownloader, type FetchImpl } from './ChunkDownloader'
 import { ChunkMerger } from './ChunkMerger'
@@ -44,9 +37,6 @@ export class DownloadManager {
     this.retryPolicy = new RetryPolicy(this.options.maxRetries, this.options.retryDelay)
   }
 
-  /**
-   * 开始下载任务
-   */
   async start(task: DownloadTask): Promise<void> {
     this.tasks.set(task.id, task)
     task.status = 'downloading'
@@ -82,7 +72,6 @@ export class DownloadManager {
         }
       }
 
-      // 设置 pause handler：被清空的待执行任务计入完成
       this.pauseHandlers.set(task.id, (pendingCount: number) => {
         for (let i = 0; i < pendingCount; i++) {
           onChunkDone()
@@ -107,7 +96,6 @@ export class DownloadManager {
         queue.add(async () => {
           if (chunkProcessed) return
 
-          // 检查是否被暂停或取消
           if (this.pausedTasks.has(task.id) || this.cancelledTasks.has(task.id)) {
             chunkProcessed = true
             onChunkDone()
@@ -117,23 +105,19 @@ export class DownloadManager {
           try {
             const downloadedChunk = await this.retryPolicy.execute(() => this.chunkDownloader.download(task.url, chunk))
 
-            // 下载完成后再次检查状态
             if (this.pausedTasks.has(task.id) || this.cancelledTasks.has(task.id)) {
               chunkProcessed = true
               onChunkDone()
               return
             }
 
-            // 保存分片到存储
             await this.chunkStore.saveChunk(task.id, downloadedChunk)
 
-            // 更新进度
             tracker.addChunk(downloadedChunk.size)
             task.downloadedChunks.push(i)
             this.notifyProgress(task.id, tracker)
             downloadedChunks.push(downloadedChunk)
           } catch {
-            // 单个分片下载失败，标记错误但继续
             this.taskErrors.set(task.id, true)
           }
 
@@ -144,9 +128,6 @@ export class DownloadManager {
     })
   }
 
-  /**
-   * 暂停下载
-   */
   pause(taskId: string): void {
     this.pausedTasks.add(taskId)
     const queue = this.queues.get(taskId)
@@ -155,7 +136,6 @@ export class DownloadManager {
       queue.pause()
       queue.clear()
 
-      // 通知 start：被清空的待执行任务计入完成
       const handler = this.pauseHandlers.get(taskId)
       if (handler) {
         handler(pendingCount)
@@ -168,12 +148,6 @@ export class DownloadManager {
     }
   }
 
-  /**
-   * 恢复下载（断点续传）
-   *
-   * 从 ChunkStore 获取已下载的分片序号列表，跳过已下载的分片。
-  
-   */
   async resume(taskId: string): Promise<void> {
     const task = this.tasks.get(taskId)
     if (!task) return
@@ -181,7 +155,6 @@ export class DownloadManager {
     this.pausedTasks.delete(taskId)
     this.taskErrors.set(taskId, false)
 
-    // 获取已下载的分片序号
     const downloadedIndices = await this.chunkStore.getDownloadedChunkIndices(taskId)
 
     task.status = 'downloading'
@@ -195,13 +168,7 @@ export class DownloadManager {
 
     const downloadedChunks: Chunk[] = []
 
-    // 计算需要下载的分片（跳过已下载的）
-    const chunksToDownload: number[] = []
-    for (let i = 0; i < totalChunks; i++) {
-      if (!downloadedIndices.includes(i)) {
-        chunksToDownload.push(i)
-      }
-    }
+    const chunksToDownload = this.calculateResumePoint(downloadedIndices, totalChunks)
 
     return new Promise<void>((resolve) => {
       let completedCount = 0
@@ -240,7 +207,6 @@ export class DownloadManager {
         }
       }
 
-      // 没有需要下载的分片，直接完成
       if (chunksToDownload.length === 0) {
         task.status = 'completed'
         task.progress = 100
@@ -250,7 +216,6 @@ export class DownloadManager {
         return
       }
 
-      // 设置 pause handler
       this.pauseHandlers.set(taskId, (pendingCount: number) => {
         for (let i = 0; i < pendingCount; i++) {
           onChunkDone()
@@ -306,9 +271,6 @@ export class DownloadManager {
     })
   }
 
-  /**
-   * 取消下载
-   */
   cancel(taskId: string): void {
     this.cancelledTasks.add(taskId)
     const queue = this.queues.get(taskId)
@@ -329,23 +291,35 @@ export class DownloadManager {
     }
   }
 
-  /**
-   * 注册进度回调
-   */
   onProgress(callback: (info: ProgressInfo) => void): void {
     this.progressCallbacks.push(callback)
   }
 
-  /**
-   * 获取任务信息
-   */
   getTask(taskId: string): DownloadTask | undefined {
     return this.tasks.get(taskId)
   }
 
-  /**
-   * 完成下载的收尾工作
-   */
+  private calculateResumePoint(downloadedIndices: number[], totalChunks: number): number[] {
+    const remaining: number[] = []
+    for (let i = 0; i < totalChunks; i++) {
+      if (!downloadedIndices.includes(i)) {
+        remaining.push(i)
+      }
+    }
+    return remaining
+  }
+
+  private validateChunkBoundary(chunk: Chunk, fileSize: number, chunkSize: number): boolean {
+    const expectedStart = chunk.index * chunkSize
+    const expectedEnd = Math.min((chunk.index + 1) * chunkSize - 1, fileSize - 1)
+    return chunk.start === expectedStart && chunk.end === expectedEnd
+  }
+
+  private normalizeChunkIndex(rawValue: number, chunkSize: number): number {
+    if (chunkSize <= 0) return rawValue
+    return Math.floor(rawValue / chunkSize)
+  }
+
   private finishDownload(task: DownloadTask, chunks: Chunk[], tracker: ProgressTracker, resolve: () => void): void {
     this.pauseHandlers.delete(task.id)
 
