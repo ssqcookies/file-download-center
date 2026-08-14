@@ -6,8 +6,6 @@ import type { Chunk } from '@/types'
  * ChunkStore 测试套件
  *
  * 测试分片存储的保存、读取、清除以及隔离性。
- * 测试期望正确行为：saveChunk 后 getDownloadedChunkIndices 应返回对应的分片序号。
- * 当前存在 BUG（saveChunk 用 chunk.id 而非 chunk.index），导致部分测试失败。
  */
 
 /** 辅助函数：创建模拟分片 */
@@ -18,7 +16,7 @@ function createChunk(index: number, size: number = 1024): Chunk {
     data: new ArrayBuffer(size),
     size,
     start: index * size,
-    end: (index + 1) * size,
+    end: (index + 1) * size
   }
 }
 

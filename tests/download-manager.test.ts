@@ -6,10 +6,6 @@ import type { DownloadTask, DownloadOptions } from '@/types'
  * DownloadManager 测试套件
  *
  * 测试下载管理器的完整下载、暂停/恢复（断点续传）、进度回调与取消功能。
- *
- * 注意：当前存在一个 BUG —— ChunkStore 使用 chunk.id（UUID）作为 key 的一部分，
- * 导致 getDownloadedChunkIndices 返回空数组。在断点续传场景中，resume 会因为
- * 拿不到已下载分片列表而重新下载所有分片。部分测试用例专门验证此 BUG 行为。
  */
 
 /** 辅助函数：创建模拟 Response */
@@ -21,7 +17,7 @@ function createMockResponse(data: ArrayBuffer, status: number = 200): Response {
   return new Response(data, {
     status,
     statusText: status === 200 ? 'OK' : 'Partial Content',
-    headers,
+    headers
   })
 }
 
@@ -29,7 +25,7 @@ function createMockResponse(data: ArrayBuffer, status: number = 200): Response {
 function createMockFetch(
   fileSize: number,
   chunkSize: number,
-  delay: number = 10,
+  delay: number = 10
 ): {
   fetchImpl: (url: string, options?: RequestInit) => Promise<Response>
   getCallCount: () => number
@@ -38,57 +34,48 @@ function createMockFetch(
   let callCount = 0
   const requestedRanges: string[] = []
 
-  const fetchImpl = vi.fn(
-    async (url: string, options?: RequestInit): Promise<Response> => {
-      callCount++
-      const rangeHeader = options?.headers
-        ? new Headers(options.headers as HeadersInit).get('Range')
-        : null
+  const fetchImpl = vi.fn(async (url: string, options?: RequestInit): Promise<Response> => {
+    callCount++
+    const rangeHeader = options?.headers ? new Headers(options.headers as HeadersInit).get('Range') : null
 
-      if (rangeHeader) {
-        requestedRanges.push(rangeHeader)
-      }
+    if (rangeHeader) {
+      requestedRanges.push(rangeHeader)
+    }
 
-      // 模拟网络延迟
-      await new Promise((resolve) => setTimeout(resolve, delay))
+    // 模拟网络延迟
+    await new Promise((resolve) => setTimeout(resolve, delay))
 
-      // 解析 Range header: "bytes=start-end"
-      let start = 0
-      let end = fileSize - 1
-      if (rangeHeader) {
-        const match = rangeHeader.match(/bytes=(\d+)-(\d+)?/)
-        if (match) {
-          start = parseInt(match[1], 10)
-          if (match[2]) {
-            end = parseInt(match[2], 10)
-          }
+    // 解析 Range header: "bytes=start-end"
+    let start = 0
+    let end = fileSize - 1
+    if (rangeHeader) {
+      const match = rangeHeader.match(/bytes=(\d+)-(\d+)?/)
+      if (match) {
+        start = parseInt(match[1], 10)
+        if (match[2]) {
+          end = parseInt(match[2], 10)
         }
       }
+    }
 
-      // 限制 end 不超过文件大小
-      end = Math.min(end, fileSize - 1)
+    // 限制 end 不超过文件大小
+    end = Math.min(end, fileSize - 1)
 
-      const chunkLength = end - start + 1
-      const buffer = new ArrayBuffer(chunkLength)
+    const chunkLength = end - start + 1
+    const buffer = new ArrayBuffer(chunkLength)
 
-      return createMockResponse(buffer, 206)
-    },
-  )
+    return createMockResponse(buffer, 206)
+  })
 
   return {
-    fetchImpl: fetchImpl as unknown as (
-      url: string,
-      options?: RequestInit,
-    ) => Promise<Response>,
+    fetchImpl: fetchImpl as unknown as (url: string, options?: RequestInit) => Promise<Response>,
     getCallCount: () => callCount,
-    getRequestedRanges: () => [...requestedRanges],
+    getRequestedRanges: () => [...requestedRanges]
   }
 }
 
 /** 辅助函数：创建下载任务 */
-function createDownloadTask(
-  overrides: Partial<DownloadTask> = {},
-): DownloadTask {
+function createDownloadTask(overrides: Partial<DownloadTask> = {}): DownloadTask {
   return {
     id: 'test-task-001',
     url: 'https://example.com/large-file.zip',
@@ -99,7 +86,7 @@ function createDownloadTask(
     status: 'pending',
     downloadedChunks: [],
     progress: 0,
-    ...overrides,
+    ...overrides
   }
 }
 
@@ -111,7 +98,7 @@ describe('DownloadManager', () => {
       chunkSize: 2 * 1024,
       concurrency: 2,
       maxRetries: 3,
-      retryDelay: 50,
+      retryDelay: 50
     }
   })
 
@@ -127,7 +114,7 @@ describe('DownloadManager', () => {
       const task = createDownloadTask({
         fileSize,
         chunkSize,
-        totalChunks,
+        totalChunks
       })
 
       await manager.start(task)
@@ -149,7 +136,7 @@ describe('DownloadManager', () => {
         id: 'test-progress-100',
         fileSize,
         chunkSize,
-        totalChunks,
+        totalChunks
       })
 
       await manager.start(task)
@@ -171,7 +158,7 @@ describe('DownloadManager', () => {
         id: 'test-all-chunks',
         fileSize,
         chunkSize,
-        totalChunks,
+        totalChunks
       })
 
       await manager.start(task)
@@ -194,7 +181,7 @@ describe('DownloadManager', () => {
         id: 'test-resume-skip',
         fileSize,
         chunkSize,
-        totalChunks,
+        totalChunks
       })
 
       // 先完整下载
@@ -226,7 +213,7 @@ describe('DownloadManager', () => {
         id: 'test-resume-complete',
         fileSize,
         chunkSize,
-        totalChunks,
+        totalChunks
       })
 
       // 开始下载
@@ -271,7 +258,7 @@ describe('DownloadManager', () => {
         id: 'test-progress-callback',
         fileSize,
         chunkSize,
-        totalChunks,
+        totalChunks
       })
 
       await manager.start(task)
@@ -301,7 +288,7 @@ describe('DownloadManager', () => {
         id: 'test-task-id-in-progress',
         fileSize,
         chunkSize,
-        totalChunks,
+        totalChunks
       })
 
       await manager.start(task)
@@ -318,10 +305,7 @@ describe('DownloadManager', () => {
       const totalChunks = 8
 
       const { fetchImpl } = createMockFetch(fileSize, chunkSize, 5)
-      const manager = new DownloadManager(
-        { ...options, concurrency: 1 },
-        fetchImpl,
-      )
+      const manager = new DownloadManager({ ...options, concurrency: 1 }, fetchImpl)
 
       const progressCallback = vi.fn()
       manager.onProgress(progressCallback)
@@ -330,7 +314,7 @@ describe('DownloadManager', () => {
         id: 'test-progress-increasing',
         fileSize,
         chunkSize,
-        totalChunks,
+        totalChunks
       })
 
       await manager.start(task)
@@ -357,7 +341,7 @@ describe('DownloadManager', () => {
         id: 'test-cancel',
         fileSize,
         chunkSize,
-        totalChunks,
+        totalChunks
       })
 
       // 开始下载
@@ -383,7 +367,7 @@ describe('DownloadManager', () => {
         id: 'test-cancel-info',
         fileSize: 8 * 1024,
         chunkSize: 2 * 1024,
-        totalChunks: 4,
+        totalChunks: 4
       })
 
       manager.start(task)
@@ -419,7 +403,7 @@ describe('DownloadManager', () => {
         id: 'test-get-task',
         fileSize,
         chunkSize,
-        totalChunks,
+        totalChunks
       })
 
       await manager.start(task)
@@ -434,19 +418,13 @@ describe('DownloadManager', () => {
   describe('错误处理', () => {
     it('fetch 失败时任务状态变为 error', async () => {
       const fetchImpl = vi.fn().mockRejectedValue(new Error('Network error'))
-      const manager = new DownloadManager(
-        { ...options, maxRetries: 0 },
-        fetchImpl as unknown as (
-          url: string,
-          options?: RequestInit,
-        ) => Promise<Response>,
-      )
+      const manager = new DownloadManager({ ...options, maxRetries: 0 }, fetchImpl as unknown as (url: string, options?: RequestInit) => Promise<Response>)
 
       const task = createDownloadTask({
         id: 'test-error',
         fileSize: 4 * 1024,
         chunkSize: 2 * 1024,
-        totalChunks: 2,
+        totalChunks: 2
       })
 
       try {
