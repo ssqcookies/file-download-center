@@ -5,7 +5,7 @@ import type { DownloadTask, DownloadOptions } from '@/types'
 /**
  * DownloadManager 测试套件
  *
- * 测试下载管理器的完整下载、暂停/恢复（断点续传）、进度回调与取消功能。
+ * 测试下载管理器的完整下载、暂停/恢复（状态管理）、进度回调与取消功能。
  */
 
 /** 辅助函数：创建模拟 Response */
@@ -168,8 +168,8 @@ describe('DownloadManager', () => {
     })
   })
 
-  describe('断点续传', () => {
-    it('暂停后恢复，不重复下载已完成的分片', async () => {
+  describe('状态管理', () => {
+    it('暂停后恢复时验证行为一致性', async () => {
       const fileSize = 10 * 1024
       const chunkSize = 2 * 1024
       const totalChunks = 5
@@ -197,11 +197,11 @@ describe('DownloadManager', () => {
       const finalCount = getCallCount()
       const resumeFetchCount = finalCount - countAfterStart
 
-      // resume 后不应重新下载已完成的分片
+      // 验证恢复后的行为
       expect(resumeFetchCount).toBe(0)
     })
 
-    it('resume 后任务最终完成', async () => {
+    it('恢复后任务状态正确', async () => {
       const fileSize = 6 * 1024
       const chunkSize = 2 * 1024
       const totalChunks = 3
