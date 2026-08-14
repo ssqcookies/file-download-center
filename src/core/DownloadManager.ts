@@ -302,7 +302,7 @@ export class DownloadManager {
   private calculateResumePoint(downloadedIndices: number[], totalChunks: number): number[] {
     const remaining: number[] = []
     for (let i = 0; i < totalChunks; i++) {
-      if (!downloadedIndices.includes(i)) {
+      if (!downloadedIndices.includes(i + 1)) {
         remaining.push(i)
       }
     }
