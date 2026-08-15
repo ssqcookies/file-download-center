@@ -383,6 +383,29 @@ describe('DownloadManager', () => {
   })
 
   describe('getTask', () => {
+    it('start 不应修改调用者传入的原始 task 对象', async () => {
+      const fileSize = 4 * 1024
+      const chunkSize = 2 * 1024
+      const totalChunks = 2
+
+      const { fetchImpl } = createMockFetch(fileSize, chunkSize, 10)
+      const manager = new DownloadManager(options, fetchImpl)
+
+      const task = createDownloadTask({
+        id: 'test-no-mutation',
+        fileSize,
+        chunkSize,
+        totalChunks
+      })
+
+      const originalDownloadedChunks = [...task.downloadedChunks]
+
+      await manager.start(task)
+
+      // 原始 task 对象的 downloadedChunks 不应被内部逻辑修改
+      expect(task.downloadedChunks).toEqual(originalDownloadedChunks)
+    })
+
     it('获取不存在的任务返回 undefined', () => {
       const { fetchImpl } = createMockFetch(1024, 1024)
       const manager = new DownloadManager(options, fetchImpl)

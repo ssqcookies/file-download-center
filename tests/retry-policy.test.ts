@@ -178,6 +178,42 @@ describe('RetryPolicy', () => {
     })
   })
 
+  describe('多次调用独立性', () => {
+    it('同一 RetryPolicy 实例多次调用时重试次数不共享', async () => {
+      const policy = new RetryPolicy(2, 50)
+
+      // 第一次调用：失败 2 次后成功（用完 2 次重试预算）
+      const fn1 = vi
+        .fn()
+        .mockRejectedValueOnce(new Error('fail 1'))
+        .mockRejectedValueOnce(new Error('fail 2'))
+        .mockResolvedValueOnce('success 1')
+
+      const promise1 = policy.execute(fn1)
+      await vi.advanceTimersByTimeAsync(50)
+      await vi.advanceTimersByTimeAsync(50)
+      const result1 = await promise1
+
+      expect(result1).toBe('success 1')
+      expect(fn1).toHaveBeenCalledTimes(3)
+
+      // 第二次调用：失败 1 次后应成功（重试预算应重置，不共享）
+      const fn2 = vi
+        .fn()
+        .mockRejectedValueOnce(new Error('recoverable'))
+        .mockResolvedValueOnce('success 2')
+
+      const promise2 = policy.execute(fn2)
+      promise2.catch(() => {})
+      await vi.advanceTimersByTimeAsync(50)
+
+      const result2 = await promise2
+
+      expect(result2).toBe('success 2')
+      expect(fn2).toHaveBeenCalledTimes(2)
+    })
+  })
+
   describe('不同返回类型', () => {
     it('支持返回 Promise<void>', async () => {
       const policy = new RetryPolicy(1, 50)

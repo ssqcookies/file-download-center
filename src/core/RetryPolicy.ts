@@ -7,6 +7,7 @@
 export class RetryPolicy {
   private maxRetries: number;
   private delay: number;
+  private currentRetries = 0;
 
   /**
    * @param maxRetries 最大重试次数（不含首次执行）
@@ -26,12 +27,12 @@ export class RetryPolicy {
   async execute<T>(fn: () => Promise<T>): Promise<T> {
     let lastError: unknown;
 
-    for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
+    for (; this.currentRetries <= this.maxRetries; this.currentRetries++) {
       try {
         return await fn();
       } catch (error) {
         lastError = error;
-        if (attempt < this.maxRetries) {
+        if (this.currentRetries < this.maxRetries) {
           await this.sleep(this.delay);
         }
       }

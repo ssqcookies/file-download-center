@@ -48,10 +48,7 @@ export class ConcurrentQueue {
    */
   resume(): void {
     this.paused = false;
-    const slots = this.concurrency - this.activeCount;
-    for (let i = 0; i < slots; i++) {
-      this.processQueue();
-    }
+    this.processQueue();
   }
 
   /**

@@ -165,6 +165,53 @@ describe('ConcurrentQueue', () => {
       await promise1
       queue.clear()
     })
+
+    it('resume 后应填满所有并发槽位', async () => {
+      const concurrency = 3
+      const queue = new ConcurrentQueue(concurrency)
+
+      let activeCount = 0
+      let maxActiveAfterResume = 0
+
+      const createTask = (id: number) => () =>
+        new Promise<number>((resolve) => {
+          activeCount++
+          maxActiveAfterResume = Math.max(maxActiveAfterResume, activeCount)
+          setTimeout(() => {
+            activeCount--
+            resolve(id)
+          }, 50)
+        })
+
+      // 添加 6 个任务
+      const promises: Promise<number>[] = []
+      for (let i = 0; i < 6; i++) {
+        promises.push(queue.add(createTask(i)))
+      }
+
+      // 等待前 3 个开始执行
+      await new Promise((resolve) => setTimeout(resolve, 10))
+
+      // 暂停（3 个在执行，3 个在 pending）
+      queue.pause()
+
+      // 等待正在执行的任务完成
+      await new Promise((resolve) => setTimeout(resolve, 80))
+
+      // 重置统计
+      maxActiveAfterResume = 0
+
+      // 恢复后应填满所有并发槽位
+      queue.resume()
+
+      // 等待一下让任务开始
+      await new Promise((resolve) => setTimeout(resolve, 10))
+
+      // resume 后应该有最多 concurrency 个任务同时执行
+      expect(maxActiveAfterResume).toBe(concurrency)
+
+      await Promise.all(promises)
+    })
   })
 
   describe('clear', () => {
