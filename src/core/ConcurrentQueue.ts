@@ -48,7 +48,9 @@ export class ConcurrentQueue {
    */
   resume(): void {
     this.paused = false;
-    this.processQueue();
+    while (this.activeCount < this.concurrency && this.queue.length > 0) {
+      this.processQueue();
+    }
   }
 
   /**
@@ -69,7 +71,7 @@ export class ConcurrentQueue {
   }
 
   private processQueue(): void {
-    if (this.paused || this.activeCount >= this.concurrency) {
+    if (this.activeCount >= this.concurrency) {
       return;
     }
 

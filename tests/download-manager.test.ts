@@ -326,6 +326,37 @@ describe('DownloadManager', () => {
         expect(lastCall[0].downloaded).toBe(fileSize)
       }
     })
+
+    it('下载过程中 downloaded 字段持续增长（非零）', async () => {
+      const fileSize = 8 * 1024
+      const chunkSize = 1 * 1024
+      const totalChunks = 8
+
+      const { fetchImpl } = createMockFetch(fileSize, chunkSize, 5)
+      const manager = new DownloadManager({ ...options, concurrency: 1 }, fetchImpl)
+
+      const progressCallback = vi.fn()
+      manager.onProgress(progressCallback)
+
+      const task = createDownloadTask({
+        id: 'test-progress-nonzero',
+        fileSize,
+        chunkSize,
+        totalChunks
+      })
+
+      await manager.start(task)
+
+      // 排除最后一次回调（finishDownload 中 tracker.update 一次性设置为 fileSize）
+      const calls = progressCallback.mock.calls
+      const intermediateCalls = calls.slice(0, -1)
+
+      // 中间回调的 downloaded 值应大于 0（每个分片下载后进度应增长）
+      const hasPositiveDownloaded = intermediateCalls.some(
+        (call) => call[0].downloaded > 0
+      )
+      expect(hasPositiveDownloaded).toBe(true)
+    })
   })
 
   describe('cancel', () => {

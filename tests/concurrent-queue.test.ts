@@ -166,40 +166,33 @@ describe('ConcurrentQueue', () => {
       queue.clear()
     })
 
-    it('恢复后的并发调度能力', async () => {
+    it('恢复后填满所有并发槽位', async () => {
       const concurrency = 3
       const queue = new ConcurrentQueue(concurrency)
+      queue.pause()
 
       let activeCount = 0
-      let maxActiveAfterResume = 0
+      let maxActive = 0
 
       const createTask = (id: number) => () =>
         new Promise<number>((resolve) => {
           activeCount++
-          maxActiveAfterResume = Math.max(maxActiveAfterResume, activeCount)
+          maxActive = Math.max(maxActive, activeCount)
           setTimeout(() => {
             activeCount--
             resolve(id)
           }, 50)
         })
 
-      // 添加 6 个任务
+      // 添加 6 个任务（队列已暂停，不应执行）
       const promises: Promise<number>[] = []
       for (let i = 0; i < 6; i++) {
         promises.push(queue.add(createTask(i)))
       }
 
-      // 等待前 3 个开始执行
+      // 等待一段时间，确认没有任务执行
       await new Promise((resolve) => setTimeout(resolve, 10))
-
-      // 暂停（3 个在执行，3 个在 pending）
-      queue.pause()
-
-      // 等待正在执行的任务完成
-      await new Promise((resolve) => setTimeout(resolve, 80))
-
-      // 重置统计
-      maxActiveAfterResume = 0
+      expect(maxActive).toBe(0)
 
       // 恢复队列
       queue.resume()
@@ -208,7 +201,7 @@ describe('ConcurrentQueue', () => {
       await new Promise((resolve) => setTimeout(resolve, 10))
 
       // resume 后应该有最多 concurrency 个任务同时执行
-      expect(maxActiveAfterResume).toBe(concurrency)
+      expect(maxActive).toBe(concurrency)
 
       await Promise.all(promises)
     })

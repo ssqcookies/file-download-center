@@ -61,6 +61,7 @@ export class DownloadManager {
     this.tasks.set(internalTask.id, internalTask);
     internalTask.status = 'downloading';
     internalTask.progress = 0;
+    internalTask.downloadedChunks = [...task.downloadedChunks];
     internalTask.downloadedChunks.length = 0;
 
     const tracker = new ProgressTracker(task.id, task.fileSize);
@@ -146,8 +147,8 @@ export class DownloadManager {
             await this.chunkStore.saveChunk(task.id, downloadedChunk);
 
             // 更新进度
-            tracker.addChunk(downloadedChunk.size);
-            task.downloadedChunks.push(i);
+            tracker.addChunk(chunk.size);
+            internalTask.downloadedChunks.push(i);
             this.notifyProgress(task.id, tracker);
             downloadedChunks.push(downloadedChunk);
           } catch {
@@ -312,7 +313,7 @@ export class DownloadManager {
             }
 
             await this.chunkStore.saveChunk(taskId, downloadedChunk);
-            tracker.addChunk(downloadedChunk.size);
+            tracker.addChunk(chunk.size);
             task.downloadedChunks.push(i);
             this.notifyProgress(taskId, tracker);
             downloadedChunks.push(downloadedChunk);

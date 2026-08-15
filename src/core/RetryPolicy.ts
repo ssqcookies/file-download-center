@@ -7,15 +7,16 @@
 export class RetryPolicy {
   private maxRetries: number;
   private delay: number;
-  private currentRetries = 0;
+  private currentDelay: number;
 
   /**
    * @param maxRetries 最大重试次数（不含首次执行）
-   * @param delay 每次重试前的延迟（毫秒）
+   * @param delay 每次重试前的初始延迟（毫秒），采用指数退避策略
    */
   constructor(maxRetries: number, delay: number) {
     this.maxRetries = maxRetries;
     this.delay = delay;
+    this.currentDelay = delay;
   }
 
   /**
@@ -26,14 +27,16 @@ export class RetryPolicy {
    */
   async execute<T>(fn: () => Promise<T>): Promise<T> {
     let lastError: unknown;
+    let currentRetries = 0;
 
-    for (; this.currentRetries <= this.maxRetries; this.currentRetries++) {
+    for (; currentRetries <= this.maxRetries; currentRetries++) {
       try {
         return await fn();
       } catch (error) {
         lastError = error;
-        if (this.currentRetries < this.maxRetries) {
-          await this.sleep(this.delay);
+        if (currentRetries < this.maxRetries) {
+          await this.sleep(this.currentDelay);
+          this.currentDelay *= 2;
         }
       }
     }

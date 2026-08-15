@@ -60,9 +60,9 @@ describe('RetryPolicy', () => {
 
       const promise = policy.execute(fn)
 
-      // 推进 fake timer 以跳过重试延迟
+      // 推进 fake timer 以跳过重试延迟（指数退避：100ms → 200ms）
       await vi.advanceTimersByTimeAsync(100)
-      await vi.advanceTimersByTimeAsync(100)
+      await vi.advanceTimersByTimeAsync(200)
 
       const result = await promise
 
@@ -97,9 +97,9 @@ describe('RetryPolicy', () => {
       const promise = policy.execute(fn)
       promise.catch(() => {})
 
-      // 推进 timer 以触发所有重试（2 次重试 = 2 次延迟）
+      // 推进 timer 以触发所有重试（指数退避：50ms → 100ms）
       await vi.advanceTimersByTimeAsync(50)
-      await vi.advanceTimersByTimeAsync(50)
+      await vi.advanceTimersByTimeAsync(100)
 
       await expect(promise).rejects.toThrow('always fails')
 
@@ -120,7 +120,7 @@ describe('RetryPolicy', () => {
   })
 
   describe('重试延迟', () => {
-    it('每次重试之间有延迟', async () => {
+    it('每次重试之间有延迟（指数退避）', async () => {
       const delay = 200
       const policy = new RetryPolicy(2, delay)
       const fn = vi
@@ -135,7 +135,7 @@ describe('RetryPolicy', () => {
       // 第一次调用立即执行
       expect(fn).toHaveBeenCalledTimes(1)
 
-      // 推进 delay-1 ms，第二次调用还未发生
+      // 推进 delay-1 ms，第二次调用还未发生（第一次重试延迟 = 200ms）
       await vi.advanceTimersByTimeAsync(delay - 1)
       expect(fn).toHaveBeenCalledTimes(1)
 
@@ -143,8 +143,8 @@ describe('RetryPolicy', () => {
       await vi.advanceTimersByTimeAsync(1)
       expect(fn).toHaveBeenCalledTimes(2)
 
-      // 推进 delay-1 ms，第三次调用还未发生
-      await vi.advanceTimersByTimeAsync(delay - 1)
+      // 推进 delay*2-1 ms，第三次调用还未发生（指数退避：第二次重试延迟 = 400ms）
+      await vi.advanceTimersByTimeAsync(delay * 2 - 1)
       expect(fn).toHaveBeenCalledTimes(2)
 
       // 推进剩余 1ms，第三次调用发生
@@ -179,10 +179,11 @@ describe('RetryPolicy', () => {
   })
 
   describe('多任务场景', () => {
-    it('连续执行多个任务时的重试行为', async () => {
+    it('连续执行多个任务时的重试延迟不累积', async () => {
       const policy = new RetryPolicy(2, 50)
 
-      // 第一次调用：失败 2 次后成功（用完 2 次重试预算）
+      // 第一次调用：失败 2 次后成功
+      // 指数退避：第一次重试延迟 50ms，第二次重试延迟 100ms
       const fn1 = vi
         .fn()
         .mockRejectedValueOnce(new Error('fail 1'))
@@ -191,13 +192,15 @@ describe('RetryPolicy', () => {
 
       const promise1 = policy.execute(fn1)
       await vi.advanceTimersByTimeAsync(50)
-      await vi.advanceTimersByTimeAsync(50)
+      await vi.advanceTimersByTimeAsync(100)
       const result1 = await promise1
 
       expect(result1).toBe('success 1')
       expect(fn1).toHaveBeenCalledTimes(3)
 
       // 第二次调用：失败 1 次后成功
+      // 正确行为：延迟应重置为初始值 50ms
+      // Bug 行为：currentDelay 泄漏为 200ms，50ms 不足以触发重试
       const fn2 = vi
         .fn()
         .mockRejectedValueOnce(new Error('recoverable'))
@@ -207,10 +210,12 @@ describe('RetryPolicy', () => {
       promise2.catch(() => {})
       await vi.advanceTimersByTimeAsync(50)
 
-      const result2 = await promise2
-
-      expect(result2).toBe('success 2')
+      // 如果延迟正确重置，fn2 应被调用 2 次（首次 + 1 次重试）
+      // 如果延迟泄漏，fn2 只被调用 1 次（重试尚未触发）
       expect(fn2).toHaveBeenCalledTimes(2)
+
+      const result2 = await promise2
+      expect(result2).toBe('success 2')
     })
   })
 
