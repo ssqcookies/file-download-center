@@ -383,7 +383,7 @@ describe('DownloadManager', () => {
   })
 
   describe('getTask', () => {
-    it('start 不应修改调用者传入的原始 task 对象', async () => {
+    it('任务对象的封装性', async () => {
       const fileSize = 4 * 1024
       const chunkSize = 2 * 1024
       const totalChunks = 2
@@ -402,7 +402,7 @@ describe('DownloadManager', () => {
 
       await manager.start(task)
 
-      // 原始 task 对象的 downloadedChunks 不应被内部逻辑修改
+      // 验证 task 对象的封装性
       expect(task.downloadedChunks).toEqual(originalDownloadedChunks)
     })
 

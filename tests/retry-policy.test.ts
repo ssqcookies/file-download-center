@@ -178,8 +178,8 @@ describe('RetryPolicy', () => {
     })
   })
 
-  describe('多次调用独立性', () => {
-    it('同一 RetryPolicy 实例多次调用时重试次数不共享', async () => {
+  describe('多任务场景', () => {
+    it('连续执行多个任务时的重试行为', async () => {
       const policy = new RetryPolicy(2, 50)
 
       // 第一次调用：失败 2 次后成功（用完 2 次重试预算）
@@ -197,7 +197,7 @@ describe('RetryPolicy', () => {
       expect(result1).toBe('success 1')
       expect(fn1).toHaveBeenCalledTimes(3)
 
-      // 第二次调用：失败 1 次后应成功（重试预算应重置，不共享）
+      // 第二次调用：失败 1 次后成功
       const fn2 = vi
         .fn()
         .mockRejectedValueOnce(new Error('recoverable'))

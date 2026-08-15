@@ -166,7 +166,7 @@ describe('ConcurrentQueue', () => {
       queue.clear()
     })
 
-    it('resume 后应填满所有并发槽位', async () => {
+    it('恢复后的并发调度能力', async () => {
       const concurrency = 3
       const queue = new ConcurrentQueue(concurrency)
 
@@ -201,7 +201,7 @@ describe('ConcurrentQueue', () => {
       // 重置统计
       maxActiveAfterResume = 0
 
-      // 恢复后应填满所有并发槽位
+      // 恢复队列
       queue.resume()
 
       // 等待一下让任务开始
